@@ -23,6 +23,7 @@ unsigned int hpos, rad;
 double kp1, ki1, kd1, kp2, ki2, kd2;
 unsigned int hposT, radT, timepassed;
 int err1, errSum1, lastErr1, derr1, adjust1, err2, errSum2, lastErr2, derr2, adjust2;
+unsigned int hpos_last, rad_last;
 
 unsigned char counter;
 
@@ -77,7 +78,7 @@ void USART_Tick(){
 		break;
 		
 		case Recieving:
-			usart_state = Recieving;
+		usart_state = Recieving;
 		break;
 		
 		default:
@@ -93,6 +94,8 @@ void USART_Tick(){
 		break;
 		
 		case Recieving:
+		hpos_last = hpos;
+		rad_last= rad;
 		rec_flag = 1;
 		signal = USART_Receive(0);
 		USART_Flush(0);
@@ -148,7 +151,7 @@ void Move_Tick(){
 		break;
 		
 		case Move:
-			move_state = Move;
+		move_state = Move;
 		break;
 		
 		default:
@@ -170,13 +173,11 @@ void Move_Tick(){
 		errSum1 = 0;
 		timepassed = 1;
 		lastErr1 = 0;
-		kp2 = 0.3;
+		kp2 = 0.2;
 		ki2 = 0;
 		kd2 = 0;
 		errSum2 = 0;
 		lastErr2 = 0;
-		counter ++;
-		PORTC = counter;
 		break;
 		
 		case Move:
@@ -192,6 +193,14 @@ void Move_Tick(){
 		errSum2 += err2 * timepassed;
 		derr2 = (err2 - lastErr2) / timepassed;
 		adjust2 = kp2 * err2 + ki2 * errSum2 + kd2 * derr2;
+		//if (rad == rad_last && hpos == hpos_last  && counter > 10) {
+		//set_PWM1(0);
+		//set_PWM2(0);
+		//counter++;
+		//PORTC = counter;
+		//}
+		//else {
+		counter = 0;
 		if (err1 > 0) {
 			PORTB &= 0xF0;
 			PORTB |= 0x05;
@@ -229,6 +238,9 @@ void Move_Tick(){
 				set_PWM2(0);
 			}
 		}
+		lastErr1 = err1;
+		lastErr2 = err2;
+		//}
 		break;
 		
 		default:

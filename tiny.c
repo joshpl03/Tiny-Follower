@@ -1,9 +1,9 @@
 /*
- * tiny.c
- *
- * Created: 11/20/2017 10:02:15 AM
- * Author : Joshua Liu
- */ 
+* tiny.c
+*
+* Created: 11/20/2017 10:02:15 AM
+* Author : Joshua Liu
+*/
 
 #include <avr/io.h>
 #include <util/delay.h>
@@ -23,6 +23,8 @@ unsigned int hpos, rad;
 double kp1, ki1, kd1, kp2, ki2, kd2;
 unsigned int hposT, radT, timepassed;
 int err1, errSum1, lastErr1, derr1, adjust1, err2, errSum2, lastErr2, derr2, adjust2;
+
+unsigned char counter;
 
 void PWM_on() {
 	TCCR3A |= (1 << COM3A1) | (1 << WGM30);
@@ -75,7 +77,7 @@ void USART_Tick(){
 		break;
 		
 		case Recieving:
-		usart_state = Recieving;
+			usart_state = Recieving;
 		break;
 		
 		default:
@@ -91,13 +93,12 @@ void USART_Tick(){
 		break;
 		
 		case Recieving:
-		
+		rec_flag = 1;
 		signal = USART_Receive(0);
 		USART_Flush(0);
 		if (signal == 'A') {
 			block11 = USART_Receive(0);
 			USART_Flush(0);
-			rec_flag = 1;
 		}
 		else if (signal == 'B') {
 			block12 = USART_Receive(0);
@@ -138,17 +139,20 @@ void Move_Tick(){
 		case MINIT:
 		if (rec_flag) {
 			move_state = Move;
+			//PORTC = 0xF0;
 		}
 		else {
 			move_state = MINIT;
+			//PORTC = 0x0F;
 		}
 		break;
 		
 		case Move:
-		move_state = Move;
+			move_state = Move;
 		break;
 		
 		default:
+		move_state = MINIT;
 		break;
 		
 	}
@@ -166,11 +170,13 @@ void Move_Tick(){
 		errSum1 = 0;
 		timepassed = 1;
 		lastErr1 = 0;
-		kp2 = 0.5;
+		kp2 = 0.3;
 		ki2 = 0;
 		kd2 = 0;
 		errSum2 = 0;
 		lastErr2 = 0;
+		counter ++;
+		PORTC = counter;
 		break;
 		
 		case Move:
@@ -219,11 +225,10 @@ void Move_Tick(){
 				//OCR1A = -adjust2;
 			}
 			else {
-				OCR3A = 0;
-				OCR1A = 0;
+				set_PWM1(0);
+				set_PWM2(0);
 			}
 		}
-		PORTC = adjust1;
 		break;
 		
 		default:
@@ -244,7 +249,12 @@ int main(void)
 	initUSART(0);
 	USART_Flush(0);
 	
-    while (1) {
+	usart_state = UINIT;
+	move_state = MINIT;
+	
+	counter = 0x00;
+	
+	while (1) {
 		USART_Tick();
 		Move_Tick();
 	}

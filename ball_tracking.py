@@ -4,23 +4,26 @@
 
 # import the necessary packages
 from collections import deque
+from picamera.array import PiRGBArray
+from picamera import PiCamera
 import sys
 PY3 = sys.version_info[0] == 3
 if PY3:
     xrange = range
 import numpy as np
 import argparse
-import imutils
+#import imutils
 import cv2
 import serial
+import time
 
 # construct serial port
 ser = serial.Serial(port='/dev/serial0', baudrate=9600, bytesize=8, parity='N', stopbits=1)
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
-ap.add_argument("-v", "--video",
-	help="path to the (optional) video file")
+#ap.add_argument("-v", "--video",
+#	help="path to the (optional) video file")
 ap.add_argument("-b", "--buffer", type=int, default=64,
 	help="max buffer size")
 args = vars(ap.parse_args())
@@ -28,32 +31,61 @@ args = vars(ap.parse_args())
 # define the lower and upper boundaries of the "green"
 # ball in the HSV color space, then initialize the
 # list of tracked points
-greenLower = (51, 51, 128)
-greenUpper = (77, 115, 255)
+
+# ROOM
+#greenLower = (22, 43, 84)
+#greenUpper = (46, 195, 222)
+
+# DOWNSTAIRS
+greenLower = (41, 51, 48)
+greenUpper = (78, 131, 243)
+#greenLower = (32, 48, 42)
+#greenUpper = (60, 165, 255)
+
+# LAB
+#greenLower = (34, 51, 38)
+#greenUpper = (53, 238, 226)
+
 pts = deque(maxlen=args["buffer"])
 
+#PiCamera init
+camera = PiCamera()
+camera.resolution = (640, 480)
+camera.framerate = 32
+rawCapture = PiRGBArray(camera, size=(640, 480))
+time.sleep(0.1)
 # if a video path was not supplied, grab the reference
 # to the webcam
-if not args.get("video", False):
-	camera = cv2.VideoCapture(0)
+#if not args.get("video", False):
+#	camera = cv2.VideoCapture(0)
 
 # otherwise, grab a reference to the video file
-else:
-	camera = cv2.VideoCapture(args["video"])
+#else:
+#	camera = cv2.VideoCapture(args["video"])
 
 # keep looping
-while True:
+for frames in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
 	# grab the current frame
-	(grabbed, frame) = camera.read()
+	frame = frames.array
+	frame = cv2.flip(frame,0)
+	frame = cv2.flip(frame,1)
+
+	# if the 'q' key is pressed, stop the loop
+	key = cv2.waitKey(1) & 0xFF
+	if key == ord("q"):
+            cv2.imwrite(r'/home/pi/Pictures/test.png', frame)
+            break
+        
+	#(grabbed, frame) = camera.read()
 
 	# if we are viewing a video and we did not grab a frame,
 	# then we have reached the end of the video
-	if args.get("video") and not grabbed:
-		break
+	#if args.get("video") and not grabbed:
+	#	break
 
 	# resize the frame, blur it, and convert it to the HSV
 	# color space
-	frame = imutils.resize(frame, width=600)
+	#frame = cv2.resize(frame, None, fx=0.95, fy=0.95, interpolation = cv2.INTER_AREA)
 	# blurred = cv2.GaussianBlur(frame, (11, 11), 0)
 	hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
@@ -81,13 +113,14 @@ while True:
 		center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
 
 		# only proceed if the radius meets a minimum size
-		if radius > 10:
+		if radius > 25:
 			# draw the circle and centroid on the frame,
 			# then update the list of tracked points
 			cv2.circle(frame, (int(x), int(y)), int(radius),
 				(0, 255, 255), 2)
 			cv2.circle(frame, center, 5, (0, 0, 255), -1)
 			# split up 'x' data and send over serial
+			#print(x)
 			hpos = int(x)
 			hpos1 = hpos & 0xF
 			ser.write('A'.encode())
@@ -107,7 +140,8 @@ while True:
 			rad2 = (rad & 0xF0) >> 4
 			ser.write('Y'.encode())
 			ser.write(bytes([rad2]))
-			print(str(rad1) + ' ' + str(rad2))
+			#print(rad)
+			#print(str(rad1) + ' ' + str(rad2))
 
 	# update the points queue
 	pts.appendleft(center)
@@ -126,12 +160,10 @@ while True:
 
 	# show the frame to our screen
 	cv2.imshow("Frame", frame)
-	key = cv2.waitKey(1) & 0xFF
 
-	# if the 'q' key is pressed, stop the loop
-	if key == ord("q"):
-		break
+	# clear the stream in preparation for the next frame
+	rawCapture.truncate(0)
 
 # cleanup the camera and close any open windows
-camera.release()
+#camera.release()
 cv2.destroyAllWindows()
